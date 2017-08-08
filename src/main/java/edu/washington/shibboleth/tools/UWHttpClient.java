@@ -59,6 +59,7 @@ import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.protocol.HttpClientContext;
+import org.apache.http.client.config.RequestConfig;
 
 import org.apache.http.config.Registry;
 import org.apache.http.config.RegistryBuilder;
@@ -69,9 +70,7 @@ import org.apache.http.impl.client.HttpClients;
 
 import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
 import org.apache.http.params.HttpConnectionParams;
-import org.apache.http.params.HttpParams;
 import org.apache.http.impl.client.BasicCredentialsProvider;
-import org.apache.http.params.BasicHttpParams;
 
 import org.apache.http.conn.socket.ConnectionSocketFactory;
 
@@ -107,8 +106,11 @@ public class UWHttpClient {
     /** Cred provider if basic auth */
     private CredentialsProvider credsProvider;
 
-    /** Time, in milliseconds, to wait for a search to return. */
-    private int searchTimeLimit;
+    /** Time, in seconds, to wait for a connection. */
+    private int connectTimeLimit = 7;
+
+    /** Time, in seconds, to wait for a response. */
+    private int responseTimeLimit = 7;
 
     /** Accept header. */
     private String acceptHeader = "application/json";
@@ -133,7 +135,6 @@ public class UWHttpClient {
     private boolean isBasicAuthn = false;
     private boolean isCertAuthn = false;
 
-    /** 
     /**
      * Constructor
      */
@@ -157,19 +158,19 @@ public class UWHttpClient {
         * Create our client 
         */
 
-       // HttpClientBuilder cb = HttpClients.custom().setConnectionManager(connectionManager);
-       HttpClientBuilder cb = HttpClientBuilder.create().setConnectionManager(connectionManager);
-       // requires lib 4.x
-       // cb = cb.setConnectionManagerShared(true);
+       RequestConfig requestConfig = RequestConfig.custom()
+            .setConnectTimeout(connectTimeLimit * 1000)
+            .setSocketTimeout(responseTimeLimit * 1000).build();
 
+       HttpClientBuilder builder = HttpClients.custom().setConnectionManager(connectionManager).setDefaultRequestConfig(requestConfig);
        if (username!=null && password!=null) {
           CredentialsProvider credsProvider = new BasicCredentialsProvider();
           UsernamePasswordCredentials usernamePasswordCredentials = new UsernamePasswordCredentials(username, password);
           credsProvider.setCredentials(AuthScope.ANY, usernamePasswordCredentials);
-          cb = cb.setDefaultCredentialsProvider(credsProvider);
+          builder = builder.setDefaultCredentialsProvider(credsProvider);
           log.info("HttpDataSource: added basic creds ");
        }
-       httpClient = cb.build(); 
+       httpClient = builder.build(); 
     }
 
     /**
@@ -187,7 +188,7 @@ public class UWHttpClient {
      */
     public String getResource(String url) {
        String content = null;
-       log.info("rws get: " + url);
+       log.debug("web get: " + url);
        HttpGet httpget = new HttpGet(url);
        log.debug("accept=" + acceptHeader + ", options=" + optionsHeader);
        httpget.setHeader("Accept", acceptHeader);
@@ -196,7 +197,8 @@ public class UWHttpClient {
           CloseableHttpResponse response = httpClient.execute(httpget, clientContext.get());
           try {
               int sc = response.getStatusLine().getStatusCode();
-              log.info("status: " + sc);
+              if (sc<500) log.debug("status: " + sc);
+              else log.error("web get error: url=" + url + ", status="+ sc);
               HttpEntity entity = response.getEntity();
               if (entity != null) {
                   content = EntityUtils.toString(entity);
@@ -207,7 +209,7 @@ public class UWHttpClient {
               response.close();
           }
        }  catch (Exception e) {
-           log.error("rws get error: " + e);
+           log.error("web get error: url=" + url + ", error="+ e);
        }
        return content;
     }
@@ -217,7 +219,7 @@ public class UWHttpClient {
      */
     public String postResource(String url, String data) {
        String content = null;
-       log.info("rws post: " + url);
+       log.debug("web post: " + url);
        HttpPost httppost = new HttpPost(url);
        // parameterize this ( by this request? )
        httppost.setHeader("Accept", acceptHeader);
@@ -226,7 +228,8 @@ public class UWHttpClient {
           CloseableHttpResponse response = httpClient.execute(httppost, clientContext.get());
           try {
               int sc = response.getStatusLine().getStatusCode();
-              log.info("status: " + sc);
+              if (sc<500) log.debug("status: " + sc);
+              else log.error("web post error: url=" + url + ", status="+ sc);
               HttpEntity entity = response.getEntity();
               if (entity != null) {
                   content = EntityUtils.toString(entity);
@@ -237,7 +240,7 @@ public class UWHttpClient {
               response.close();
           }
        }  catch (Exception e) {
-           log.error("rws get error: " + e);
+           log.error("web post error: url=" + url + ", error="+ e);
        }
        return content;
     }
@@ -369,13 +372,21 @@ public class UWHttpClient {
 
 
     /**
-     * This sets the time in milliseconds that the ldap will wait for search results. A value of 0 means to wait
-     * indefinitely. This method will remove any cached results.
+     * This sets the time in seconds to wait for a connection.
      * 
-     * @param i <code>int</code> milliseconds
+     * @param i <code>int</code> seconds
      */
-    public void setSearchTimeLimit(int i) {
-        searchTimeLimit = i;
+    public void setConnectTimeLimit(int i) {
+        connectTimeLimit = i;
+    }
+
+    /**
+     * This sets the time in seconds to wait for a response.
+     * 
+     * @param i <code>int</code> seconds
+     */
+    public void setResponseTimeLimit(int i) {
+        responseTimeLimit = i;
     }
 
     /**

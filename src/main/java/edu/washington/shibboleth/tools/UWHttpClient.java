@@ -58,7 +58,6 @@ import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.methods.HttpPost;
 import org.apache.http.client.methods.CloseableHttpResponse;
-import org.apache.http.client.protocol.HttpClientContext;
 import org.apache.http.client.config.RequestConfig;
 
 import org.apache.http.config.Registry;
@@ -82,10 +81,8 @@ import org.apache.http.auth.AuthScope;
 import org.apache.http.auth.AuthState;
 import org.apache.http.util.EntityUtils;
 
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 
 /**
  * <code>UWHttpClient</code> provides a webservice client.
@@ -121,8 +118,10 @@ public class UWHttpClient {
     /** Connection manager */
     private PoolingHttpClientConnectionManager connectionManager;
 
+    private RequestConfig requestConfig;
+
     /** Http client **/
-    private CloseableHttpClient httpClient;
+    private HttpClient httpClient;
 
     /** max connections */
     private int maxConnections = 10;
@@ -142,7 +141,7 @@ public class UWHttpClient {
     }
 
     /**
-     * Initializes the connector and prepares it for use.
+     * Initializes the client utility
      */
     public void initialize() throws IOException {
        log.info("HttpDataSource: initialize");
@@ -158,7 +157,7 @@ public class UWHttpClient {
         * Create our client 
         */
 
-       RequestConfig requestConfig = RequestConfig.custom()
+       requestConfig = RequestConfig.custom()
             .setConnectTimeout(connectTimeLimit * 1000)
             .setSocketTimeout(responseTimeLimit * 1000).build();
 
@@ -173,15 +172,20 @@ public class UWHttpClient {
        httpClient = builder.build(); 
     }
 
-    /**
-     * Each thread gets a context
-     */
-    private static final ThreadLocal<HttpClientContext> clientContext = new ThreadLocal<HttpClientContext>() {
-        @Override
-        protected HttpClientContext initialValue() {
-            return new HttpClientContext();
-        }
-    };
+    /* make a client */
+    private HttpClient getClient() {
+       log.info("uw web getClient, pool stats: " + connectionManager.getTotalStats().toString());
+
+       HttpClientBuilder builder = HttpClients.custom().setConnectionManager(connectionManager).setDefaultRequestConfig(requestConfig);
+       if (username!=null && password!=null) {
+          CredentialsProvider credsProvider = new BasicCredentialsProvider();
+          UsernamePasswordCredentials usernamePasswordCredentials = new UsernamePasswordCredentials(username, password);
+          credsProvider.setCredentials(AuthScope.ANY, usernamePasswordCredentials);
+          builder = builder.setDefaultCredentialsProvider(credsProvider);
+          log.info("HttpDataSource: added basic creds ");
+       }
+       return builder.build(); 
+    }
 
     /**
      * Retrieve a resource
@@ -193,9 +197,9 @@ public class UWHttpClient {
        log.debug("accept=" + acceptHeader + ", options=" + optionsHeader);
        httpget.setHeader("Accept", acceptHeader);
        if (optionsHeader != null) httpget.addHeader("Option-List", optionsHeader);
+       HttpResponse response = null;
        try {
-          CloseableHttpResponse response = httpClient.execute(httpget, clientContext.get());
-          try {
+          response = getClient().execute(httpget);
               int sc = response.getStatusLine().getStatusCode();
               if (sc<500) log.debug("status: " + sc);
               else log.error("web get error: url=" + url + ", status="+ sc);
@@ -205,11 +209,10 @@ public class UWHttpClient {
                   log.trace("content dump:");
                   log.trace(content);
               }
-          } finally {
-              response.close();
-          }
+              EntityUtils.consume(response.getEntity());
        }  catch (Exception e) {
            log.error("web get error: url=" + url + ", error="+ e);
+           connectionManager.closeExpiredConnections();
        }
        return content;
     }
@@ -224,9 +227,9 @@ public class UWHttpClient {
        // parameterize this ( by this request? )
        httppost.setHeader("Accept", acceptHeader);
        if (optionsHeader != null) httppost.addHeader("Option-List", optionsHeader);
+       HttpResponse response = null;
        try {
-          CloseableHttpResponse response = httpClient.execute(httppost, clientContext.get());
-          try {
+          response = getClient().execute(httppost);
               int sc = response.getStatusLine().getStatusCode();
               if (sc<500) log.debug("status: " + sc);
               else log.error("web post error: url=" + url + ", status="+ sc);
@@ -236,11 +239,10 @@ public class UWHttpClient {
                   log.trace("content dump:");
                   log.trace(content);
               }
-          } finally {
-              response.close();
-          }
+              EntityUtils.consume(response.getEntity());
        }  catch (Exception e) {
            log.error("web post error: url=" + url + ", error="+ e);
+           connectionManager.closeExpiredConnections();
        }
        return content;
     }

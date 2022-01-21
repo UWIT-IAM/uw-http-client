@@ -6,7 +6,7 @@
     <name>Shibboleth IdP :: generic http client</name>
     <artifactId>uw-http-client</artifactId>
     <groupId>edu.washington.iam</groupId>
-    <version>1.2.0</version>
+    <version>1.2.1</version>
     <packaging>jar</packaging>
 
     <repositories>
@@ -25,17 +25,17 @@
         <dependency>
             <groupId>org.apache.httpcomponents</groupId>
             <artifactId>httpclient</artifactId>
-            <version>4.5.2</version>
+            <version>4.5.9</version>
         </dependency>
         <dependency>
             <groupId>net.shibboleth.idp</groupId>
             <artifactId>idp-authn-api</artifactId>
-            <version>3.4.6</version>
+            <version>4.0.1</version>
         </dependency>
         <dependency>
             <groupId>net.shibboleth.utilities</groupId>
             <artifactId>java-support</artifactId>
-            <version>7.5.1</version>
+            <version>8.1.0</version>
         </dependency>
         <dependency>
             <groupId>net.shibboleth.ext</groupId>
@@ -46,7 +46,7 @@
         <dependency>
             <groupId>commons-logging</groupId>
             <artifactId>commons-logging</artifactId>
-            <version>1.1.1</version>
+            <version>1.2</version>
         </dependency>
 
         <!-- Runtime Dependencies -->
